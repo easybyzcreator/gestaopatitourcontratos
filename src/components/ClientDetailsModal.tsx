@@ -180,6 +180,10 @@ export default function ClientDetailsModal({
     const normalizedPayments = editPayments.map(p => ({
       ...p,
       amount: isNaN(Number(p.amount)) ? 0 : Number(p.amount),
+      paidAmount:
+        p.status === 'PAGO' && typeof p.paidAmount === 'number' && !isNaN(Number(p.paidAmount))
+          ? Number(p.paidAmount)
+          : undefined,
       paymentDate:
         p.status === 'PAGO'
           ? p.paymentDate || new Date().toISOString().split('T')[0]
@@ -233,9 +237,11 @@ export default function ClientDetailsModal({
   };
 
   // Finance summaries
+  const getPaidValue = (p: Registration['payments'][number]) =>
+    typeof p.paidAmount === 'number' && !isNaN(p.paidAmount) ? p.paidAmount : p.amount;
   const totalValue = registration.payments.reduce((acc, p) => acc + p.amount, 0);
-  const totalPaid = registration.payments.filter(p => p.status === 'PAGO').reduce((acc, p) => acc + p.amount, 0);
-  const totalRemaining = totalValue - totalPaid;
+  const totalPaid = registration.payments.filter(p => p.status === 'PAGO').reduce((acc, p) => acc + getPaidValue(p), 0);
+  const totalRemaining = registration.payments.filter(p => p.status !== 'PAGO').reduce((acc, p) => acc + p.amount, 0);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -598,22 +604,42 @@ export default function ClientDetailsModal({
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-[10px] text-gray-500 mb-0.5">Status</label>
-                          <select
-                            value={pay.status}
-                            onChange={(e) => {
-                              const nextStatus = e.target.value as 'PENDENTE' | 'PAGO' | 'ATRASADO';
-                              setEditPayments(prev =>
-                                prev.map((item, i) => (i === idx ? { ...item, status: nextStatus } : item))
-                              );
-                            }}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-natural-brand"
-                          >
-                            <option value="PENDENTE">PENDENTE</option>
-                            <option value="PAGO">PAGO</option>
-                            <option value="ATRASADO">ATRASADO</option>
-                          </select>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-0.5">Status</label>
+                            <select
+                              value={pay.status}
+                              onChange={(e) => {
+                                const nextStatus = e.target.value as 'PENDENTE' | 'PAGO' | 'ATRASADO';
+                                setEditPayments(prev =>
+                                  prev.map((item, i) => (i === idx ? { ...item, status: nextStatus } : item))
+                                );
+                              }}
+                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-natural-brand"
+                            >
+                              <option value="PENDENTE">PENDENTE</option>
+                              <option value="PAGO">PAGO</option>
+                              <option value="ATRASADO">ATRASADO</option>
+                            </select>
+                          </div>
+                          {pay.status === 'PAGO' && (
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-0.5">Valor Pago (R$)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={typeof pay.paidAmount === 'number' ? pay.paidAmount : pay.amount}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setEditPayments(prev =>
+                                    prev.map((item, i) => (i === idx ? { ...item, paidAmount: isNaN(val) ? 0 : val } : item))
+                                  );
+                                }}
+                                className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-mono focus:outline-natural-brand"
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -708,13 +734,12 @@ export default function ClientDetailsModal({
               <div className="pt-4 border-t border-gray-100 mt-4">
                 <span className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">Status Financeiro</span>
                 {(() => {
-                  const totalPaid = registration.payments?.filter(p => p.status === 'PAGO').reduce((acc, p) => acc + p.amount, 0) || 0;
-                  const totalDue = registration.payments?.reduce((acc, p) => acc + p.amount, 0) || 0;
+                  const allPaid = registration.payments?.length > 0 && registration.payments.every(p => p.status === 'PAGO');
                   
                   let label = "PENDENTE";
                   let badgeClass = "bg-gray-100 text-gray-600";
                   
-                  if (totalPaid >= totalDue && totalDue > 0) {
+                  if (allPaid) {
                     label = "CONFIRMADO";
                     badgeClass = "bg-green-100 text-green-800";
                   } else if (totalPaid > 0) {
@@ -918,22 +943,34 @@ export default function ClientDetailsModal({
 
                 {/* Installment lists */}
                 <div className="space-y-2 mb-4 max-h-[160px] overflow-y-auto pr-1">
-                  {registration.payments.map((p, index) => (
-                    <div key={p.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl text-xs">
-                      <div>
-                        <span className="font-bold text-gray-700">{index + 1}ª Parc.</span>
-                        <span className="block text-[9px] text-gray-400 font-mono">{new Date(p.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                  {registration.payments.map((p, index) => {
+                    const effectiveAmount = p.status === 'PAGO' ? getPaidValue(p) : p.amount;
+                    const hasExtraFees = p.status === 'PAGO' && typeof p.paidAmount === 'number' && p.paidAmount > p.amount + 0.009;
+                    const hasDiffAmount = p.status === 'PAGO' && typeof p.paidAmount === 'number' && Math.abs(p.paidAmount - p.amount) > 0.009;
+                    return (
+                      <div key={p.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl text-xs">
+                        <div>
+                          <span className="font-bold text-gray-700">{index + 1}ª Parc.</span>
+                          <span className="block text-[9px] text-gray-400 font-mono">{new Date(p.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <span className="font-bold text-gray-700 font-mono block">R$ {effectiveAmount.toFixed(2)}</span>
+                            {hasDiffAmount && (
+                              <span className="block text-[9px] text-amber-700 font-medium">
+                                Orig. R$ {p.amount.toFixed(2)}{hasExtraFees ? ' (+ juros/multa)' : ''}
+                              </span>
+                            )}
+                          </div>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                            p.status === 'PAGO' ? 'bg-green-100 text-green-800' : p.status === 'ATRASADO' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {p.status}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-700 font-mono">R$ {p.amount.toFixed(2)}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
-                          p.status === 'PAGO' ? 'bg-green-100 text-green-800' : p.status === 'ATRASADO' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {p.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

@@ -194,6 +194,8 @@ export default async function handler(req: any, res: any) {
         billingType: "BOLETO",
         value: Number(p.amount.toFixed(2)),
         dueDate: p.dueDate,
+        fine: { value: 2, type: "PERCENTAGE" },
+        interest: { value: 1 },
         description,
         externalReference: registrationId,
         postalService: false
@@ -261,6 +263,8 @@ export default async function handler(req: any, res: any) {
           billingType: "BOLETO",
           value: Number(p.amount.toFixed(2)),
           dueDate: p.dueDate,
+          fine: { value: 2, type: "PERCENTAGE" },
+          interest: { value: 1 },
           description,
           externalReference: registrationId,
           postalService: false

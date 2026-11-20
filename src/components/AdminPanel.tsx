@@ -251,12 +251,13 @@ export default function AdminPanel({
     };
 
     regs.forEach(reg => {
-      const totalPaid = reg.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + p.amount, 0) || 0;
+      const totalPaid = reg.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + (typeof p.paidAmount === 'number' ? p.paidAmount : p.amount), 0) || 0;
       const totalDue = reg.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-      const pending = totalDue - totalPaid;
+      const pending = reg.payments?.filter(p => p.status !== 'PAGO').reduce((sum, p) => sum + p.amount, 0) || 0;
+      const allPaid = reg.payments?.length > 0 && reg.payments.every(p => p.status === 'PAGO');
       
       let statusLabel = 'PENDENTE';
-      if (totalPaid >= totalDue && totalDue > 0) {
+      if (allPaid) {
         statusLabel = 'CONFIRMADO';
       } else if (totalPaid > 0) {
         statusLabel = 'PAGO PARCIAL';
@@ -316,7 +317,7 @@ export default function AdminPanel({
   const handleExportPaidStudents = (trip: Trip, regs: Registration[]) => {
     // SOMENTE OS ALUNOS Q PAGARAM PELO MENOS UMA PARCELA (totalPaid > 0)
     const paidRegs = regs.filter(r => {
-      const totalPaid = r.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + p.amount, 0) || 0;
+      const totalPaid = r.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + (typeof p.paidAmount === 'number' ? p.paidAmount : p.amount), 0) || 0;
       return totalPaid > 0;
     });
     
@@ -336,9 +337,9 @@ export default function AdminPanel({
     csvContent += 'Responsável;Aluno/Passageiro;CPF Responsável;Valor Total;Valor Pago;Valor Pendente;Status Geral\n';
     
     regs.forEach(reg => {
-      const totalPaid = reg.payments.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + p.amount, 0);
+      const totalPaid = reg.payments.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + (typeof p.paidAmount === 'number' ? p.paidAmount : p.amount), 0);
       const totalDue = reg.payments.reduce((sum, p) => sum + p.amount, 0);
-      const pending = totalDue - totalPaid;
+      const pending = reg.payments.filter(p => p.status !== 'PAGO').reduce((sum, p) => sum + p.amount, 0);
       csvContent += `"${reg.parent.name || ''}";"${reg.student.name || ''}";"${reg.parent.cpf || ''}";"R$ ${totalDue.toFixed(2)}";"R$ ${totalPaid.toFixed(2)}";"R$ ${pending.toFixed(2)}";"${reg.status}"\n`;
     });
 
@@ -381,9 +382,9 @@ export default function AdminPanel({
     return sum + reg.payments.reduce((pSum, p) => pSum + p.amount, 0);
   }, 0);
 
-  // Faturamento recebido (Soma do que está pago)
+  // Faturamento recebido (Soma do que está pago, incluindo juros/multa se houver)
   const totalReceived = registrations.reduce((sum, reg) => {
-    return sum + reg.payments.filter(p => p.status === 'PAGO').reduce((pSum, p) => pSum + p.amount, 0);
+    return sum + reg.payments.filter(p => p.status === 'PAGO').reduce((pSum, p) => pSum + (typeof p.paidAmount === 'number' ? p.paidAmount : p.amount), 0);
   }, 0);
 
   // Faturamento atrasado
@@ -401,9 +402,7 @@ export default function AdminPanel({
     
     let statusMatch = true;
     if (selectedStatusFilter) {
-      const totalPaid = reg.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + p.amount, 0) || 0;
-      const totalDue = reg.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-      const isConfirmed = totalPaid >= totalDue && totalDue > 0;
+      const isConfirmed = reg.payments?.length > 0 && reg.payments.every(p => p.status === 'PAGO');
       
       if (selectedStatusFilter === 'PAGO') {
         statusMatch = isConfirmed;
@@ -686,9 +685,10 @@ export default function AdminPanel({
 
                             return filteredTripRegs.map(reg => {
                               // Calculate payment totals for progress bar
-                              const totalPaid = reg.payments.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + p.amount, 0);
+                              const totalPaid = reg.payments.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + (typeof p.paidAmount === 'number' ? p.paidAmount : p.amount), 0);
                               const totalDue = reg.payments.reduce((sum, p) => sum + p.amount, 0);
-                              const progressPercent = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0;
+                              const allPaid = reg.payments.length > 0 && reg.payments.every(p => p.status === 'PAGO');
+                              const progressPercent = allPaid ? 100 : (totalDue > 0 ? Math.min(100, (totalPaid / totalDue) * 100) : 0);
                               const hasMedicalAlert = Boolean(
                                 reg.medical?.preExisting ||
                                 reg.medical?.allergies ||
@@ -726,7 +726,7 @@ export default function AdminPanel({
                                           let label = "PENDENTE";
                                           let badgeClass = "bg-gray-50 text-gray-500 border border-gray-200/50";
 
-                                          if (totalPaid >= totalDue && totalDue > 0) {
+                                          if (allPaid) {
                                             label = "CONFIRMADO";
                                             badgeClass = "bg-emerald-50 text-emerald-700 border border-emerald-200/50";
                                           } else if (totalPaid > 0) {
@@ -750,7 +750,7 @@ export default function AdminPanel({
                                       <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                                         <div 
                                           className={`h-full rounded-full transition-all duration-500 ${
-                                            totalPaid >= totalDue && totalDue > 0 
+                                            allPaid
                                               ? 'bg-emerald-600' 
                                               : totalPaid > 0 
                                               ? 'bg-amber-500' 
@@ -1063,13 +1063,13 @@ export default function AdminPanel({
 
                             <td className="px-6 py-4 text-center">
                               {(() => {
-                                const totalPaid = reg.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + p.amount, 0) || 0;
-                                const totalDue = reg.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+                                const totalPaid = reg.payments?.filter(p => p.status === 'PAGO').reduce((sum, p) => sum + (typeof p.paidAmount === 'number' ? p.paidAmount : p.amount), 0) || 0;
+                                const allPaid = reg.payments?.length > 0 && reg.payments.every(p => p.status === 'PAGO');
                                 
                                 let label = "PENDENTE";
                                 let badgeClass = "bg-gray-50 text-gray-500 border border-gray-200/50";
                                 
-                                if (totalPaid >= totalDue && totalDue > 0) {
+                                if (allPaid) {
                                   label = "CONFIRMADO";
                                   badgeClass = "bg-emerald-50 text-emerald-700 border border-emerald-200/50";
                                 } else if (totalPaid > 0) {

@@ -73,6 +73,7 @@ export interface InstallmentPayment {
   id: string;
   installmentNumber: number;
   amount: number;
+  paidAmount?: number;
   dueDate: string;
   status: 'PENDENTE' | 'PAGO' | 'ATRASADO';
   paymentDate?: string;

@@ -44,11 +44,16 @@ export default async function handler(req: any, res: any) {
     const paymentId = payment.id; // pay_xxxxxxxx
     const status = payment.status; // e.g., "RECEIVED", "CONFIRMED", etc.
     const externalReference = payment.externalReference; // e.g., "reg-xxxxxxx"
+    const rawPaidValue = Number(payment.value);
+    const hasValidPaidValue = !isNaN(rawPaidValue) && rawPaidValue > 0;
+    const paidDate = payment.clientPaymentDate || payment.paymentDate || payment.confirmedDate || new Date().toISOString().split("T")[0];
 
-    console.log(`Asaas Payment Notification in serverless handler: ID=${paymentId}, Status=${status}, ExtRef=${externalReference}`);
+    console.log(`Asaas Payment Notification in serverless handler: ID=${paymentId}, Event=${eventData.event}, Status=${status}, Value=${payment.value}, ExtRef=${externalReference}`);
 
-    // We only care about payments that are paid/received/confirmed
-    const isPaid = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(status);
+    // Check both event name and payment status for paid confirmation
+    const isPaid =
+      ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED"].includes(eventData.event) ||
+      ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(status);
 
     if (externalReference) {
       // Retrieve the registration document from Firestore
@@ -63,16 +68,32 @@ export default async function handler(req: any, res: any) {
         if (regData.payments && Array.isArray(regData.payments)) {
           regData.payments = regData.payments.map((p: any) => {
             if (p.asaasId === paymentId) {
-              // If the webhook status is paid, set the status to "PAGO"
               const newStatus = isPaid ? "PAGO" : "PENDENTE";
               if (p.status !== newStatus) {
                 p.status = newStatus;
                 updated = true;
                 console.log(`Updated payment status of registration ${externalReference} to ${newStatus}`);
               }
+              if (isPaid) {
+                if (hasValidPaidValue && p.paidAmount !== rawPaidValue) {
+                  p.paidAmount = rawPaidValue;
+                  updated = true;
+                  console.log(`Saved effective paidAmount=${rawPaidValue} for registration ${externalReference}`);
+                }
+                if (!p.paymentDate && paidDate) {
+                  p.paymentDate = paidDate;
+                  updated = true;
+                }
+              }
             }
             return p;
           });
+
+          if (updated) {
+            const allPaid = regData.payments.length > 0 && regData.payments.every((p: any) => p.status === "PAGO");
+            const hasOverdue = regData.payments.some((p: any) => p.status === "ATRASADO");
+            regData.status = allPaid ? "PAGO" : hasOverdue ? "ATRASADO" : "PENDENTE";
+          }
         }
 
         if (updated) {
