@@ -34,7 +34,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { payer, studentName, trip, payments: rawPayments, registrationId } = req.body;
-    const apiKey = process.env.SANDBOX_ASAAS;
+    const apiKey = process.env.ASAAS_API_KEY;
 
     // Ensure all installment due dates are today or in the future in Brazil timezone
     const today = new Date();
@@ -62,10 +62,10 @@ export default async function handler(req: any, res: any) {
     });
 
     if (!apiKey) {
-      return res.status(400).json({ error: "Variável de ambiente SANDBOX_ASAAS não configurada no servidor." });
+      return res.status(400).json({ error: "Variável de ambiente ASAAS_API_KEY não configurada no servidor." });
     }
 
-    const baseUrl = "https://sandbox.asaas.com/api/v3";
+    const baseUrl = "https://api.asaas.com/v3";
 
     const cleanCpf = payer.cpf ? payer.cpf.replace(/\D/g, "") : "";
     const cleanPhone = (payer.phone || "").replace(/\D/g, "");

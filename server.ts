@@ -32,13 +32,13 @@ async function startServer() {
   app.post("/api/asaas/create-payment", async (req, res) => {
     try {
       const { payer, studentName, trip, payments, registrationId } = req.body;
-      const apiKey = process.env.SANDBOX_ASAAS;
+      const apiKey = process.env.ASAAS_API_KEY;
 
       if (!apiKey) {
-        return res.status(400).json({ error: "Variável de ambiente SANDBOX_ASAAS não configurada no servidor." });
+        return res.status(400).json({ error: "Variável de ambiente ASAAS_API_KEY não configurada no servidor." });
       }
 
-      const baseUrl = "https://sandbox.asaas.com/api/v3";
+      const baseUrl = "https://api.asaas.com/v3";
 
       const cleanCpf = payer.cpf ? payer.cpf.replace(/\D/g, "") : "";
       const cleanPhone = (payer.phone || "").replace(/\D/g, "");
