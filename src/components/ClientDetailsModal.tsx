@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Registration, Trip, getActiveClausesList } from '../types';
 import { X, Copy, Check, MessageSquare, Plus, FileText, Trash2, Edit2, Printer, Download } from 'lucide-react';
 
 interface ClientDetailsModalProps {
   registration: Registration;
   trip: Trip;
+  userRole?: 'admin' | 'staff';
   onClose: () => void;
   onDelete: (id: string) => void;
   onUpdateRegistration: (updated: Registration) => void;
@@ -13,14 +15,23 @@ interface ClientDetailsModalProps {
 export default function ClientDetailsModal({
   registration,
   trip,
+  userRole = 'admin',
   onClose,
   onDelete,
   onUpdateRegistration
 }: ClientDetailsModalProps) {
+  const isStaff = userRole === 'staff';
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [isViewingContract, setIsViewingContract] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [registration.id]);
   
   // Local edit states - Student
   const [editName, setEditName] = useState(registration.student.name);
@@ -177,6 +188,37 @@ export default function ClientDetailsModal({
   };
 
   const handleSaveChanges = () => {
+    if (isStaff) {
+      onUpdateRegistration({
+        ...registration,
+        student: {
+          ...registration.student,
+          name: editName.trim(),
+          cpf: editStudentCpf.trim() || undefined,
+          rg: editStudentRg.trim() || undefined,
+          birthDate: editBirthDate || undefined,
+          gender: editGender ? (editGender as 'MASCULINO' | 'FEMININO') : undefined,
+          classGroup: editClass.trim() || undefined
+        },
+        parent: {
+          ...registration.parent,
+          name: editParentName.trim(),
+          cpf: editParentCpf.trim(),
+          rg: editParentRg.trim() || undefined,
+          phone: editPhone.trim(),
+          email: editEmail.trim(),
+          address: editAddress.trim()
+        },
+        payer: {
+          different: editPayerDifferent,
+          name: editPayerDifferent ? editPayerName.trim() : undefined,
+          cpf: editPayerDifferent ? editPayerCpf.trim() : undefined
+        }
+      });
+      setIsEditing(false);
+      return;
+    }
+
     const normalizedPayments = editPayments.map(p => ({
       ...p,
       amount: isNaN(Number(p.amount)) ? 0 : Number(p.amount),
@@ -243,9 +285,9 @@ export default function ClientDetailsModal({
   const totalPaid = registration.payments.filter(p => p.status === 'PAGO').reduce((acc, p) => acc + getPaidValue(p), 0);
   const totalRemaining = registration.payments.filter(p => p.status !== 'PAGO').reduce((acc, p) => acc + p.amount, 0);
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#FAF9F6] rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col border border-natural-border">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 sm:p-6 pt-4 md:pt-6 overflow-y-auto">
+      <div className="bg-[#FAF9F6] rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col border border-natural-border">
         
         {/* MODAL HEADER */}
         <div className="bg-natural-dark px-6 py-4 flex items-center justify-between text-white">
@@ -260,12 +302,14 @@ export default function ClientDetailsModal({
           </div>
           
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => onDelete(registration.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/90 hover:bg-red-700 transition rounded-xl text-xs font-semibold uppercase"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Excluir Aluno
-            </button>
+            {!isStaff && (
+              <button 
+                onClick={() => onDelete(registration.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/90 hover:bg-red-700 transition rounded-xl text-xs font-semibold uppercase"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Excluir Aluno
+              </button>
+            )}
             
             {isEditing ? (
               <button 
@@ -293,7 +337,7 @@ export default function ClientDetailsModal({
         </div>
 
         {/* MODAL CONTENT */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-6 space-y-6">
           
           {isEditing ? (
             <div className="bg-white p-6 rounded-2xl border border-natural-border space-y-6">
@@ -458,7 +502,8 @@ export default function ClientDetailsModal({
                 </div>
               </div>
 
-              {/* SEÇÃO 3: FICHA MÉDICA */}
+              {/* SEÇÃO 3: FICHA MÉDICA (ADMIN ONLY) */}
+              {!isStaff && (
               <div className="space-y-3 pt-4 border-t border-gray-100">
                 <h4 className="text-xs font-black text-natural-brand uppercase tracking-wider font-display">03. Ficha Médica</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -564,9 +609,10 @@ export default function ClientDetailsModal({
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* SEÇÃO 4: CONTROLE FINANCEIRO (PARCELAS) */}
-              {editPayments.length > 0 && (
+              {/* SEÇÃO 4: CONTROLE FINANCEIRO (PARCELAS - ADMIN ONLY) */}
+              {!isStaff && editPayments.length > 0 && (
                 <div className="space-y-3 pt-4 border-t border-gray-100">
                   <h4 className="text-xs font-black text-natural-brand uppercase tracking-wider font-display">04. Controle Financeiro (Parcelas)</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -926,20 +972,22 @@ export default function ClientDetailsModal({
                   <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase font-display">Controle Financeiro</h3>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                  <div className="bg-gray-50 p-2 rounded-xl">
-                    <span className="block text-[8px] font-bold text-gray-400 uppercase">Total</span>
-                    <span className="text-xs font-bold text-gray-800 font-mono">R$ {totalValue.toFixed(2)}</span>
+                {!isStaff && (
+                  <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+                    <div className="bg-gray-50 p-2 rounded-xl">
+                      <span className="block text-[8px] font-bold text-gray-400 uppercase">Total</span>
+                      <span className="text-xs font-bold text-gray-800 font-mono">R$ {totalValue.toFixed(2)}</span>
+                    </div>
+                    <div className="bg-green-50 p-2 rounded-xl">
+                      <span className="block text-[8px] font-bold text-green-800 uppercase">Pago</span>
+                      <span className="text-xs font-bold text-green-700 font-mono">R$ {totalPaid.toFixed(2)}</span>
+                    </div>
+                    <div className="bg-red-50 p-2 rounded-xl">
+                      <span className="block text-[8px] font-bold text-red-800 uppercase">Saldo</span>
+                      <span className="text-xs font-bold text-red-700 font-mono">R$ {totalRemaining.toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div className="bg-green-50 p-2 rounded-xl">
-                    <span className="block text-[8px] font-bold text-green-800 uppercase">Pago</span>
-                    <span className="text-xs font-bold text-green-700 font-mono">R$ {totalPaid.toFixed(2)}</span>
-                  </div>
-                  <div className="bg-red-50 p-2 rounded-xl">
-                    <span className="block text-[8px] font-bold text-red-800 uppercase">Saldo</span>
-                    <span className="text-xs font-bold text-red-700 font-mono">R$ {totalRemaining.toFixed(2)}</span>
-                  </div>
-                </div>
+                )}
 
                 {/* Installment lists */}
                 <div className="space-y-2 mb-4 max-h-[160px] overflow-y-auto pr-1">
@@ -954,14 +1002,16 @@ export default function ClientDetailsModal({
                           <span className="block text-[9px] text-gray-400 font-mono">{new Date(p.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="text-right">
-                            <span className="font-bold text-gray-700 font-mono block">R$ {effectiveAmount.toFixed(2)}</span>
-                            {hasDiffAmount && (
-                              <span className="block text-[9px] text-amber-700 font-medium">
-                                Orig. R$ {p.amount.toFixed(2)}{hasExtraFees ? ' (+ juros/multa)' : ''}
-                              </span>
-                            )}
-                          </div>
+                          {!isStaff && (
+                            <div className="text-right">
+                              <span className="font-bold text-gray-700 font-mono block">R$ {effectiveAmount.toFixed(2)}</span>
+                              {hasDiffAmount && (
+                                <span className="block text-[9px] text-amber-700 font-medium">
+                                  Orig. R$ {p.amount.toFixed(2)}{hasExtraFees ? ' (+ juros/multa)' : ''}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
                             p.status === 'PAGO' ? 'bg-green-100 text-green-800' : p.status === 'ATRASADO' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
                           }`}>
@@ -974,29 +1024,31 @@ export default function ClientDetailsModal({
                 </div>
               </div>
 
-              {/* Registrar Pagamento */}
-              <form onSubmit={handleRegisterPayment} className="pt-3 border-t border-gray-100">
-                <span className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Registrar Recebimento</span>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-2.5 top-2.5 text-xs text-gray-400 font-bold">R$</span>
-                    <input 
-                      type="text" 
-                      placeholder="0,00"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-8 pr-2.5 py-2 text-xs font-bold text-natural-brand focus:outline-natural-brand font-mono"
-                    />
+              {/* Registrar Pagamento (ADMIN ONLY) */}
+              {!isStaff && (
+                <form onSubmit={handleRegisterPayment} className="pt-3 border-t border-gray-100">
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Registrar Recebimento</span>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-2.5 top-2.5 text-xs text-gray-400 font-bold">R$</span>
+                      <input 
+                        type="text" 
+                        placeholder="0,00"
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-8 pr-2.5 py-2 text-xs font-bold text-natural-brand focus:outline-natural-brand font-mono"
+                      />
+                    </div>
+                    <button 
+                      type="submit"
+                      className="p-2.5 bg-natural-brand hover:bg-natural-brand-hover text-white rounded-xl transition flex items-center justify-center shadow-md shadow-natural-brand/10"
+                      title="Adicionar pagamento manual"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button 
-                    type="submit"
-                    className="p-2.5 bg-natural-brand hover:bg-natural-brand-hover text-white rounded-xl transition flex items-center justify-center shadow-md shadow-natural-brand/10"
-                    title="Adicionar pagamento manual"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </form>
+                </form>
+              )}
             </div>
           </div>
 
@@ -1166,6 +1218,7 @@ export default function ClientDetailsModal({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

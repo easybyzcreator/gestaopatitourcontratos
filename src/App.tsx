@@ -110,9 +110,13 @@ export default function App() {
   const [editingTrip, setEditingTrip] = useState<Trip | undefined>(undefined);
   const [isClientRegistrationFinished, setIsClientRegistrationFinished] = useState<boolean>(false);
 
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('patitour_admin_authenticated') === 'true';
+  const [adminRole, setAdminRole] = useState<'admin' | 'staff' | null>(() => {
+    const savedRole = localStorage.getItem('patitour_admin_role');
+    if (savedRole === 'admin' || savedRole === 'staff') return savedRole;
+    if (localStorage.getItem('patitour_admin_authenticated') === 'true') return 'admin';
+    return null;
   });
+  const isAdminAuthenticated = adminRole !== null;
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -239,9 +243,9 @@ export default function App() {
   }, [urlTripId, retryTick]);
 
   // 2. Admin-only real-time listeners (Registrations & Trip Defaults)
-  // Never downloaded on public client links (?trip=...) or before admin authentication!
+  // Never downloaded on public client links (?trip=...) or before authentication!
   useEffect(() => {
-    if (urlTripId || !isAdminAuthenticated) return;
+    if (urlTripId || !adminRole) return;
     let isSubscribed = true;
 
     const unsubscribeRegistrations = onSnapshot(
@@ -266,41 +270,44 @@ export default function App() {
       }
     );
 
-    const unsubscribeDefaults = onSnapshot(
-      doc(db, 'config', 'tripDefaults'),
-      (snapshot) => {
-        if (!isSubscribed) return;
-        if (snapshot.exists()) {
-          const data = snapshot.data() as Partial<TripDefaults>;
-          const merged: TripDefaults = {
-            ...SYSTEM_DEFAULT_TRIP_DEFAULTS,
-            ...data,
-            clauses: { ...SYSTEM_DEFAULT_TRIP_DEFAULTS.clauses, ...(data.clauses || {}) },
-            requiredFields: { ...SYSTEM_DEFAULT_TRIP_DEFAULTS.requiredFields, ...(data.requiredFields || {}) },
-            activeClauses: Array.isArray(data.activeClauses) ? data.activeClauses : SYSTEM_DEFAULT_TRIP_DEFAULTS.activeClauses
-          };
-          setTripDefaults(merged);
-          try {
-            localStorage.setItem('patitour_trip_defaults', JSON.stringify(merged));
-          } catch {
-            // Ignore storage error
+    const unsubscribeDefaults = adminRole === 'admin'
+      ? onSnapshot(
+          doc(db, 'config', 'tripDefaults'),
+          (snapshot) => {
+            if (!isSubscribed) return;
+            if (snapshot.exists()) {
+              const data = snapshot.data() as Partial<TripDefaults>;
+              const merged: TripDefaults = {
+                ...SYSTEM_DEFAULT_TRIP_DEFAULTS,
+                ...data,
+                clauses: { ...SYSTEM_DEFAULT_TRIP_DEFAULTS.clauses, ...(data.clauses || {}) },
+                requiredFields: { ...SYSTEM_DEFAULT_TRIP_DEFAULTS.requiredFields, ...(data.requiredFields || {}) },
+                activeClauses: Array.isArray(data.activeClauses) ? data.activeClauses : SYSTEM_DEFAULT_TRIP_DEFAULTS.activeClauses
+              };
+              setTripDefaults(merged);
+              try {
+                localStorage.setItem('patitour_trip_defaults', JSON.stringify(merged));
+              } catch {
+                // Ignore storage error
+              }
+            }
+          },
+          (error) => {
+            console.error("Trip defaults snapshot error:", error);
           }
-        }
-      },
-      (error) => {
-        console.error("Trip defaults snapshot error:", error);
-      }
-    );
+        )
+      : () => {};
 
     return () => {
       isSubscribed = false;
       unsubscribeRegistrations();
       unsubscribeDefaults();
     };
-  }, [urlTripId, isAdminAuthenticated, retryTick]);
+  }, [urlTripId, adminRole, retryTick]);
 
-  // Trip operations saved to Firestore
+  // Trip operations saved to Firestore (admin only)
   const handleSaveTrip = async (savedTrip: Trip) => {
+    if (adminRole !== 'admin') return;
     const finalTrip = {
       ...savedTrip,
       clauses: {
@@ -329,6 +336,7 @@ export default function App() {
   };
 
   const handleDeleteTrip = async (id: string) => {
+    if (adminRole !== 'admin') return;
     setTrips(prev => prev.filter(t => t.id !== id));
     setRegistrations(prev => prev.filter(r => r.tripId !== id));
 
@@ -364,6 +372,7 @@ export default function App() {
   };
 
   const handleDeleteRegistration = async (id: string) => {
+    if (adminRole !== 'admin') return;
     try {
       setRegistrations(prev => prev.filter(r => r.id !== id));
       await deleteDoc(doc(db, 'registrations', id));
@@ -390,6 +399,7 @@ export default function App() {
   };
 
   const handleSaveTripDefaults = async (newDefaults: TripDefaults) => {
+    if (adminRole !== 'admin') return;
     setTripDefaults(newDefaults);
     try {
       localStorage.setItem('patitour_trip_defaults', JSON.stringify(newDefaults));
@@ -541,7 +551,13 @@ service cloud.firestore {
       e.preventDefault();
       if (passwordInput === '1306') {
         localStorage.setItem('patitour_admin_authenticated', 'true');
-        setIsAdminAuthenticated(true);
+        localStorage.setItem('patitour_admin_role', 'admin');
+        setAdminRole('admin');
+        setPasswordError('');
+      } else if (passwordInput === '0711') {
+        localStorage.removeItem('patitour_admin_authenticated');
+        localStorage.setItem('patitour_admin_role', 'staff');
+        setAdminRole('staff');
         setPasswordError('');
       } else {
         setPasswordError('Senha incorreta. Tente novamente.');
@@ -653,12 +669,15 @@ service cloud.firestore {
             trips={trips}
             registrations={registrations}
             tripDefaults={tripDefaults}
+            userRole={adminRole || 'staff'}
             onSaveTripDefaults={handleSaveTripDefaults}
             onAddTrip={() => {
+              if (adminRole !== 'admin') return;
               setEditingTrip(undefined);
               setView('create-trip');
             }}
             onEditTrip={(trip) => {
+              if (adminRole !== 'admin') return;
               setEditingTrip(trip);
               setView('edit-trip');
             }}
@@ -666,18 +685,22 @@ service cloud.firestore {
             onUpdateRegistration={handleUpdateRegistration}
             onDeleteRegistration={handleDeleteRegistration}
             onOpenClientLink={(tripId) => {
+              if (adminRole !== 'admin') return;
               setSelectedTripId(tripId);
               setView('client-view');
             }}
             onLogout={() => {
               localStorage.removeItem('patitour_admin_authenticated');
-              setIsAdminAuthenticated(false);
+              localStorage.removeItem('patitour_admin_role');
+              setAdminRole(null);
+              setView('admin');
+              setPasswordInput('');
             }}
           />
         )}
 
-        {/* 2. RENDER CREATE TRIP FORM */}
-        {view === 'create-trip' && (
+        {/* 2. RENDER CREATE TRIP FORM (ADMIN ONLY) */}
+        {view === 'create-trip' && adminRole === 'admin' && (
           <div className="p-4 md:p-8 bg-[#FAF9F6] min-h-screen">
             <TripForm 
               tripDefaults={tripDefaults}
@@ -687,8 +710,8 @@ service cloud.firestore {
           </div>
         )}
 
-        {/* 3. RENDER EDIT TRIP FORM */}
-        {view === 'edit-trip' && editingTrip && (
+        {/* 3. RENDER EDIT TRIP FORM (ADMIN ONLY) */}
+        {view === 'edit-trip' && adminRole === 'admin' && editingTrip && (
           <div className="p-4 md:p-8 bg-[#FAF9F6] min-h-screen">
             <TripForm 
               trip={editingTrip}

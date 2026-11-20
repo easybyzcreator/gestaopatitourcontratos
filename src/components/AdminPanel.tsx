@@ -12,6 +12,7 @@ interface AdminPanelProps {
   trips: Trip[];
   registrations: Registration[];
   tripDefaults: TripDefaults;
+  userRole?: 'admin' | 'staff';
   onSaveTripDefaults: (defaults: TripDefaults) => Promise<void> | void;
   onAddTrip: () => void;
   onEditTrip: (trip: Trip) => void;
@@ -26,6 +27,7 @@ export default function AdminPanel({
   trips,
   registrations,
   tripDefaults,
+  userRole = 'admin',
   onSaveTripDefaults,
   onAddTrip,
   onEditTrip,
@@ -35,6 +37,7 @@ export default function AdminPanel({
   onOpenClientLink,
   onLogout
 }: AdminPanelProps) {
+  const isStaff = userRole === 'staff';
   const [activeTab, setActiveTab] = useState<'trips' | 'registrations' | 'defaults'>('trips');
   const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
   const [copiedTripId, setCopiedTripId] = useState<string | null>(null);
@@ -236,9 +239,7 @@ export default function AdminPanel({
       'Obs Comportamentais',
       'Data de Inscrição',
       'Status Financeiro',
-      'Valor Total',
-      'Valor Pago',
-      'Valor Pendente'
+      ...(isStaff ? [] : ['Valor Total', 'Valor Pago', 'Valor Pendente'])
     ];
     
     csvContent += headers.join(';') + '\n';
@@ -292,9 +293,13 @@ export default function AdminPanel({
         reg.medical.behavioral || '',
         reg.signedAt ? new Date(reg.signedAt).toLocaleDateString('pt-BR') : '',
         statusLabel,
-        `R$ ${totalDue.toFixed(2).replace('.', ',')}`,
-        `R$ ${totalPaid.toFixed(2).replace('.', ',')}`,
-        `R$ ${pending.toFixed(2).replace('.', ',')}`
+        ...(isStaff
+          ? []
+          : [
+              `R$ ${totalDue.toFixed(2).replace('.', ',')}`,
+              `R$ ${totalPaid.toFixed(2).replace('.', ',')}`,
+              `R$ ${pending.toFixed(2).replace('.', ',')}`
+            ])
       ];
 
       csvContent += row.map(val => `"${escapeCSV(val)}"`).join(';') + '\n';
@@ -417,7 +422,7 @@ export default function AdminPanel({
   });
 
   return (
-    <div className="flex flex-col min-h-screen bg-natural-bg animate-fadeIn pb-12 text-natural-text">
+    <div className="flex flex-col min-h-screen bg-natural-bg pb-12 text-natural-text">
       
       {/* NAVBAR */}
       <div className="bg-natural-dark px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-md">
@@ -444,22 +449,26 @@ export default function AdminPanel({
             >
               Viagens (Roteiros)
             </button>
-            <button
-              onClick={() => setActiveTab('registrations')}
-              className={`px-5 py-2 rounded-full text-xs font-black uppercase transition ${
-                activeTab === 'registrations' ? 'bg-natural-bg text-natural-text shadow-sm' : 'text-natural-border hover:text-white'
-              }`}
-            >
-              Clientes / Contratos ({registrations.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('defaults')}
-              className={`px-5 py-2 rounded-full text-xs font-black uppercase transition flex items-center gap-1.5 ${
-                activeTab === 'defaults' ? 'bg-natural-bg text-natural-text shadow-sm' : 'text-natural-border hover:text-white'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5" /> Padrões de Contrato
-            </button>
+            {!isStaff && (
+              <>
+                <button
+                  onClick={() => setActiveTab('registrations')}
+                  className={`px-5 py-2 rounded-full text-xs font-black uppercase transition ${
+                    activeTab === 'registrations' ? 'bg-natural-bg text-natural-text shadow-sm' : 'text-natural-border hover:text-white'
+                  }`}
+                >
+                  Clientes / Contratos ({registrations.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('defaults')}
+                  className={`px-5 py-2 rounded-full text-xs font-black uppercase transition flex items-center gap-1.5 ${
+                    activeTab === 'defaults' ? 'bg-natural-bg text-natural-text shadow-sm' : 'text-natural-border hover:text-white'
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5" /> Padrões de Contrato
+                </button>
+              </>
+            )}
           </div>
 
           <button
@@ -474,7 +483,7 @@ export default function AdminPanel({
 
       {/* KPI TOP COUNTERS BAR */}
       <div className="max-w-6xl mx-auto w-full px-4 mt-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-1 ${isStaff ? 'sm:grid-cols-1 max-w-xs' : 'sm:grid-cols-2 lg:grid-cols-4'} gap-4`}>
           
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
             <div>
@@ -487,40 +496,44 @@ export default function AdminPanel({
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
-            <div>
-              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Faturamento Previsto</span>
-              <span className="text-2xl font-black text-natural-text mt-1 block font-mono">R$ {totalPriceScheduled.toFixed(2)}</span>
-              <span className="text-[10px] text-gray-400 font-semibold mt-0.5 block">Previsão total de recebimento</span>
-            </div>
-            <div className="p-3 bg-natural-bg rounded-2xl text-natural-brand">
-              <DollarSign className="w-6 h-6" />
-            </div>
-          </div>
+          {!isStaff && (
+            <>
+              <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
+                <div>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Faturamento Previsto</span>
+                  <span className="text-2xl font-black text-natural-text mt-1 block font-mono">R$ {totalPriceScheduled.toFixed(2)}</span>
+                  <span className="text-[10px] text-gray-400 font-semibold mt-0.5 block">Previsão total de recebimento</span>
+                </div>
+                <div className="p-3 bg-natural-bg rounded-2xl text-natural-brand">
+                  <DollarSign className="w-6 h-6" />
+                </div>
+              </div>
 
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
-            <div>
-              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Valor Recebido</span>
-              <span className="text-2xl font-black text-natural-brand mt-1 block font-mono">R$ {totalReceived.toFixed(2)}</span>
-              <span className="text-[10px] text-natural-brand font-bold bg-amber-50 px-2 py-0.5 rounded-lg text-[9px] mt-1.5 inline-block border border-amber-100">
-                {totalPriceScheduled > 0 ? ((totalReceived / totalPriceScheduled) * 100).toFixed(0) : 0}% Liquidado
-              </span>
-            </div>
-            <div className="p-3 bg-amber-50 rounded-2xl text-natural-brand">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-          </div>
+              <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
+                <div>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Valor Recebido</span>
+                  <span className="text-2xl font-black text-natural-brand mt-1 block font-mono">R$ {totalReceived.toFixed(2)}</span>
+                  <span className="text-[10px] text-natural-brand font-bold bg-amber-50 px-2 py-0.5 rounded-lg text-[9px] mt-1.5 inline-block border border-amber-100">
+                    {totalPriceScheduled > 0 ? ((totalReceived / totalPriceScheduled) * 100).toFixed(0) : 0}% Liquidado
+                  </span>
+                </div>
+                <div className="p-3 bg-amber-50 rounded-2xl text-natural-brand">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+              </div>
 
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
-            <div>
-              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inadimplência</span>
-              <span className="text-2xl font-black text-red-600 mt-1 block font-mono">R$ {totalOverdue.toFixed(2)}</span>
-              <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Parcelas vencidas no Asaas</span>
-            </div>
-            <div className="p-3 bg-red-50 rounded-2xl text-red-700">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-          </div>
+              <div className="bg-white rounded-3xl p-5 shadow-sm border border-natural-border flex items-center justify-between">
+                <div>
+                  <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inadimplência</span>
+                  <span className="text-2xl font-black text-red-600 mt-1 block font-mono">R$ {totalOverdue.toFixed(2)}</span>
+                  <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Parcelas vencidas no Asaas</span>
+                </div>
+                <div className="p-3 bg-red-50 rounded-2xl text-red-700">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+              </div>
+            </>
+          )}
 
         </div>
       </div>
@@ -760,9 +773,11 @@ export default function AdminPanel({
                                         />
                                       </div>
 
-                                      <span className="font-mono text-[9px] text-gray-400 font-bold block mt-0.5">
-                                        R$ {totalPaid.toFixed(2).replace('.', ',')} / R$ {totalDue.toFixed(2).replace('.', ',')}
-                                      </span>
+                                      {!isStaff && (
+                                        <span className="font-mono text-[9px] text-gray-400 font-bold block mt-0.5">
+                                          R$ {totalPaid.toFixed(2).replace('.', ',')} / R$ {totalDue.toFixed(2).replace('.', ',')}
+                                        </span>
+                                      )}
                                     </div>
                                   </td>
 
@@ -794,15 +809,21 @@ export default function AdminPanel({
             <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-natural-border shadow-sm">
               <div>
                 <h2 className="text-sm font-black text-natural-text uppercase font-display">Roteiros e Viagens Ativas</h2>
-                <p className="text-xs text-gray-400">Configure as opções para os alunos realizarem a assinatura.</p>
+                <p className="text-xs text-gray-400">
+                  {isStaff
+                    ? 'Selecione um roteiro abaixo para gerenciar e consultar as fichas dos alunos.'
+                    : 'Configure as opções para os alunos realizarem a assinatura.'}
+                </p>
               </div>
               
-              <button
-                onClick={onAddTrip}
-                className="px-5 py-2.5 bg-natural-brand hover:bg-natural-brand-hover text-white font-extrabold rounded-full text-xs uppercase transition flex items-center gap-1.5 shadow-md shadow-natural-brand/10"
-              >
-                <Plus className="w-4 h-4" /> Nova Viagem
-              </button>
+              {!isStaff && (
+                <button
+                  onClick={onAddTrip}
+                  className="px-5 py-2.5 bg-natural-brand hover:bg-natural-brand-hover text-white font-extrabold rounded-full text-xs uppercase transition flex items-center gap-1.5 shadow-md shadow-natural-brand/10"
+                >
+                  <Plus className="w-4 h-4" /> Nova Viagem
+                </button>
+              )}
             </div>
 
             {/* BARRA DE FILTROS DAS VIAGENS (BUSCA + ANO) */}
@@ -893,9 +914,11 @@ export default function AdminPanel({
                           <p className="text-gray-500 font-medium truncate">
                             Destino: <strong className="text-natural-text font-bold">{trip.destination}</strong>
                           </p>
-                          <p className="text-gray-500 font-medium">
-                            Valor: <strong className="text-natural-brand font-black">R$ {trip.price.toFixed(2)}</strong>
-                          </p>
+                          {!isStaff && (
+                            <p className="text-gray-500 font-medium">
+                              Valor: <strong className="text-natural-brand font-black">R$ {trip.price.toFixed(2)}</strong>
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -905,46 +928,50 @@ export default function AdminPanel({
                           onClick={() => setSelectedTripForDetails(trip)}
                           className="w-full py-2 bg-natural-dark hover:bg-natural-dark/95 text-white font-extrabold rounded-xl text-xs uppercase transition flex items-center justify-center gap-1.5 shadow-sm"
                         >
-                          <Users className="w-3.5 h-3.5 text-natural-brand" /> Gerenciar Alunos ({tripRegs.length})
+                          <Users className="w-3.5 h-3.5 text-white" /> Gerenciar Alunos ({tripRegs.length})
                         </button>
 
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setShowLinkModal(trip)}
-                            className="flex-1 py-2 bg-natural-brand hover:bg-natural-brand-hover text-white font-extrabold rounded-xl text-[10px] uppercase transition flex items-center justify-center gap-1"
-                          >
-                            <ExternalLink className="w-3 h-3" /> Link
-                          </button>
+                        {!isStaff && (
+                          <>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setShowLinkModal(trip)}
+                                className="flex-1 py-2 bg-natural-brand hover:bg-natural-brand-hover text-white font-extrabold rounded-xl text-[10px] uppercase transition flex items-center justify-center gap-1"
+                              >
+                                <ExternalLink className="w-3 h-3" /> Link
+                              </button>
 
-                          <button
-                            onClick={() => setShowQrCodeModal(trip)}
-                            className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-natural-brand border border-amber-200/50 font-extrabold rounded-xl text-[10px] uppercase transition flex items-center justify-center gap-1"
-                          >
-                            {/* Inline SVG QR icon */}
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-3.75a1.125 1.125 0 01-1.125-1.125v-3.75zM3.75 15.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-3.75a1.125 1.125 0 01-1.125-1.125v-3.75zM15.375 3.75c-.621 0-1.125.504-1.125 1.125v3.75c0 .621.504 1.125 1.125 1.125h3.75c.621 0 1.125-.504 1.125-1.125v-3.75c0-.621-.504-1.125-1.125-1.125h-3.75z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14 14h2v2h-2v-2zM14 18h2v2h-2v-2zM18 14h2v2h-2v-2zM18 18h2v2h-2v-2zM11 11h2v2h-2v-2zM11 15h2v2h-2v-2zM15 11h2v2h-2v-2z" />
-                            </svg>
-                            QR Code
-                          </button>
-                        </div>
+                              <button
+                                onClick={() => setShowQrCodeModal(trip)}
+                                className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-natural-brand border border-amber-200/50 font-extrabold rounded-xl text-[10px] uppercase transition flex items-center justify-center gap-1"
+                              >
+                                {/* Inline SVG QR icon */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-3.75a1.125 1.125 0 01-1.125-1.125v-3.75zM3.75 15.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-3.75a1.125 1.125 0 01-1.125-1.125v-3.75zM15.375 3.75c-.621 0-1.125.504-1.125 1.125v3.75c0 .621.504 1.125 1.125 1.125h3.75c.621 0 1.125-.504 1.125-1.125v-3.75c0-.621-.504-1.125-1.125-1.125h-3.75z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 14h2v2h-2v-2zM14 18h2v2h-2v-2zM18 14h2v2h-2v-2zM18 18h2v2h-2v-2zM11 11h2v2h-2v-2zM11 15h2v2h-2v-2zM15 11h2v2h-2v-2z" />
+                                </svg>
+                                QR Code
+                              </button>
+                            </div>
 
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => onEditTrip(trip)}
-                            className="flex-1 py-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition text-center uppercase"
-                          >
-                            Editar
-                          </button>
-                          
-                          <button
-                            onClick={() => setTripToDelete(trip)}
-                            className="px-2.5 py-1.5 text-red-500 hover:bg-red-50 border border-red-200 rounded-lg transition"
-                            title="Excluir Roteiro"
-                          >
-                            <Plus className="w-3.5 h-3.5 rotate-45" />
-                          </button>
-                        </div>
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => onEditTrip(trip)}
+                                className="flex-1 py-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition text-center uppercase"
+                              >
+                                Editar
+                              </button>
+                              
+                              <button
+                                onClick={() => setTripToDelete(trip)}
+                                className="px-2.5 py-1.5 text-red-500 hover:bg-red-50 border border-red-200 rounded-lg transition"
+                                title="Excluir Roteiro"
+                              >
+                                <Plus className="w-3.5 h-3.5 rotate-45" />
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                     </div>
@@ -1128,8 +1155,10 @@ export default function AdminPanel({
         <ClientDetailsModal 
           registration={selectedRegistration}
           trip={trips.find(t => t.id === selectedRegistration.tripId) || trips[0]}
+          userRole={userRole}
           onClose={() => setSelectedRegistration(null)}
           onDelete={(id) => {
+            if (isStaff) return;
             setRegistrationToDelete(selectedRegistration);
           }}
           onUpdateRegistration={(updated) => {
