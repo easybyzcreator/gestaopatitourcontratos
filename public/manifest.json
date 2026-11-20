@@ -1,0 +1,23 @@
+{
+  "name": "CONTRATOS PATITOUR",
+  "short_name": "PATITOUR",
+  "description": "Sistema de Gestão de Contratos e Roteiros Patitour",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F6",
+  "theme_color": "#072d17",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/easybyzcreator/imagens/3a29427598f82b9a4c66ca6b3d5195bb3eb6d6ea/pwa%20patitour%20-%20gestao%20de%20contratos.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://raw.githubusercontent.com/easybyzcreator/imagens/3a29427598f82b9a4c66ca6b3d5195bb3eb6d6ea/pwa%20patitour%20-%20gestao%20de%20contratos.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

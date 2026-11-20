@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/asaas/create-payment",
+      "destination": "/api/asaas/create-payment.ts"
+    },
+    {
+      "source": "/api/asaas/webhook",
+      "destination": "/api/asaas/webhook.ts"
+    },
+    {
+      "source": "/api/asaas",
+      "destination": "/api/asaas/webhook.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

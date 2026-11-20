@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "Trip": {
+      "title": "Trip",
+      "description": "Representa um roteiro de viagem escolar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "active": { "type": "boolean" },
+        "title": { "type": "string" },
+        "school": { "type": "string" },
+        "destination": { "type": "string" },
+        "date": { "type": "string" },
+        "departureTime": { "type": "string" },
+        "returnTime": { "type": "string" },
+        "price": { "type": "number" },
+        "maxInstallments": { "type": "number" },
+        "customDueDates": { "type": "array" },
+        "allowedClasses": { "type": "array" },
+        "includedItems": { "type": "array" },
+        "foodText": { "type": "string" },
+        "activitiesText": { "type": "string" },
+        "clauses": { "type": "object" },
+        "requiredFields": { "type": "object" },
+        "asaasLink": { "type": "string" }
+      },
+      "required": ["id", "title", "school", "destination", "date", "price"]
+    },
+    "Registration": {
+      "title": "Registration",
+      "description": "Representa a inscrição/ficha preenchida pelo contratante para um aluno",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tripId": { "type": "string" },
+        "signedAt": { "type": "string" },
+        "status": { "type": "string" },
+        "student": { "type": "object" },
+        "medical": { "type": "object" },
+        "parent": { "type": "object" },
+        "payer": { "type": "object" },
+        "signature": { "type": "string" },
+        "payments": { "type": "array" },
+        "asaasCustomerId": { "type": "string" },
+        "asaasSubscriptionId": { "type": "string" }
+      },
+      "required": ["id", "tripId", "student", "parent"]
+    },
+    "AsaasConfig": {
+      "title": "AsaasConfig",
+      "description": "Configurações da chave de API e ambiente do Asaas",
+      "type": "object",
+      "properties": {
+        "apiKey": { "type": "string" },
+        "environment": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      },
+      "required": ["apiKey", "environment"]
+    }
+  },
+  "firestore": {
+    "/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Roteiros de viagens cadastrados pela agência"
+    },
+    "/registrations/{registrationId}": {
+      "schema": "Registration",
+      "description": "Inscrições / Fichas médicas e financeiras preenchidas pelos pais"
+    },
+    "/config/asaas": {
+      "schema": "AsaasConfig",
+      "description": "Configuração das credenciais do ASAAS"
+    }
+  }
+}

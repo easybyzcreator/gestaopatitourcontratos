@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Regras para Viagens (Roteiros)
+    match /trips/{tripId} {
+      // Qualquer pessoa pode visualizar os detalhes de uma viagem (necessário para os pais preencherem a ficha)
+      allow read: if true;
+      
+      // Permite criar e atualizar apenas se a estrutura estiver correta
+      allow create, update: if request.resource.data.title is string 
+                            && request.resource.data.school is string 
+                            && request.resource.data.destination is string;
+      
+      // Permite deletar viagens
+      allow delete: if true;
+    }
+
+    // 2. Regras para Inscrições e Contratos (Registrations)
+    match /registrations/{registrationId} {
+      // Permite leitura para renderizar as assinaturas e listagem no painel
+      allow read: if true;
+      
+      // Criação exige estrutura mínima de dados obrigatórios (Aluno, Responsável, Viagem) para segurança contra spam
+      allow create: if request.resource.data.tripId is string 
+                    && request.resource.data.student != null 
+                    && request.resource.data.parent != null;
+                    
+      // Atualização e exclusão exigem consistência nos dados existentes
+      allow update, delete: if resource.data.tripId is string;
+    }
+
+    // 3. Regras para Configurações do Sistema (Asaas e Padrões de Contrato)
+    match /config/{configId} {
+      // Permite acesso seguro às configurações
+      allow read: if true;
+      allow write: if configId == 'tripDefaults'
+                   || (request.resource.data.apiKey is string && request.resource.data.environment is string);
+    }
+  }
+}

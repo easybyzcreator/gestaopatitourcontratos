@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Outfit", system-ui, -apple-system, sans-serif;
+  
+  --color-natural-bg: #FAF9F6;
+  --color-natural-text: #2d312e;
+  --color-natural-brand: #072d17;
+  --color-natural-brand-hover: #0e4c27;
+  --color-natural-dark: #072d17;
+  --color-natural-dark-light: #164e2c;
+  --color-natural-border: #E6E2D3;
+  --color-natural-border-light: #F0EDE4;
+  --color-natural-border-dark: #C2BCAE;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "CONTRATOS PATITOUR",
+  "description": "Sistema de gestão de viagens pedagógicas, contratos personalizados, assinaturas digitais de pais e conciliação de pagamentos com o Asaas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
