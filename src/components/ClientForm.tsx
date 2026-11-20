@@ -83,7 +83,9 @@ export default function ClientForm({ trip, onComplete, onSaveRegistration, asaas
 
   // 5. Signature State
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const isDrawingRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState('');
 
@@ -128,55 +130,108 @@ export default function ClientForm({ trip, onComplete, onSaveRegistration, asaas
     };
   }, [createdReg?.id, createdReg?.payments, createdReg?.status]);
 
-  // Setup canvas for electronic drawing
+  // Setup canvas for electronic drawing and lock mobile touch scrolling inside canvas
   useEffect(() => {
-    if (step === 'signature' && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.strokeStyle = '#3E3A34';
-        ctx.lineWidth = 3.5;
-        ctx.lineCap = 'round';
-      }
+    if (step !== 'signature' || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = '#3E3A34';
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
     }
+
+    const preventTouchScroll = (ev: TouchEvent) => {
+      if (ev.cancelable) {
+        ev.preventDefault();
+      }
+      ev.stopPropagation();
+    };
+
+    canvas.addEventListener('touchstart', preventTouchScroll, { passive: false });
+    canvas.addEventListener('touchmove', preventTouchScroll, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('touchstart', preventTouchScroll);
+      canvas.removeEventListener('touchmove', preventTouchScroll);
+    };
   }, [step]);
 
-  // Handlers for drawing signature
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
+  const getCanvasPoint = (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
     const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    setIsDrawing(true);
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
+  // Handlers for drawing signature using Pointer Events (unified mouse + touch + stylus)
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore if pointer capture unsupported
+    }
 
-    ctx.lineTo(x, y);
+    ctx.strokeStyle = '#3E3A34';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const point = getCanvasPoint(canvas, e.clientX, e.clientY);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x + 0.01, point.y + 0.01);
     ctx.stroke();
+
+    lastPointRef.current = point;
+    isDrawingRef.current = true;
+    setIsDrawing(true);
     setHasSignature(true);
   };
 
-  const stopDrawing = () => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const point = getCanvasPoint(canvas, e.clientX, e.clientY);
+    const prev = lastPointRef.current || point;
+
+    ctx.beginPath();
+    ctx.moveTo(prev.x, prev.y);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+
+    lastPointRef.current = point;
+    setHasSignature(true);
+  };
+
+  const stopDrawing = (e?: React.PointerEvent<HTMLCanvasElement>) => {
+    isDrawingRef.current = false;
+    lastPointRef.current = null;
     setIsDrawing(false);
+    if (e && canvasRef.current) {
+      try {
+        if (canvasRef.current.hasPointerCapture(e.pointerId)) {
+          canvasRef.current.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignore
+      }
+    }
   };
 
   const clearCanvas = () => {
@@ -185,6 +240,9 @@ export default function ClientForm({ trip, onComplete, onSaveRegistration, asaas
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    isDrawingRef.current = false;
+    lastPointRef.current = null;
+    setIsDrawing(false);
     setHasSignature(false);
   };
 
@@ -1946,11 +2004,11 @@ Destino: ${trip.destination || ''}`;
               </div>
             )}
 
-            <div className="relative">
+            <div className="relative select-none">
               <button 
                 type="button" 
                 onClick={clearCanvas}
-                className="absolute right-3 top-3 px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold uppercase transition"
+                className="absolute right-3 top-3 z-10 px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold uppercase transition"
               >
                 Limpar
               </button>
@@ -1959,14 +2017,12 @@ Destino: ${trip.destination || ''}`;
                 ref={canvasRef}
                 width={650}
                 height={200}
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseLeave={stopDrawing}
-                onTouchStart={startDrawing}
-                onTouchMove={draw}
-                onTouchEnd={stopDrawing}
-                className="w-full bg-[#fcfbf9] border-2 border-dashed border-amber-200 rounded-2xl cursor-crosshair h-[200px]"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={stopDrawing}
+                onPointerCancel={stopDrawing}
+                onContextMenu={(e) => e.preventDefault()}
+                className="w-full bg-[#fcfbf9] border-2 border-dashed border-amber-200 rounded-2xl cursor-crosshair h-[200px] touch-none select-none block"
               />
               <span className="block text-center text-[10px] text-gray-400 font-mono mt-2">Área segura criptografada Contratos Patitour</span>
             </div>

@@ -1,5 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -12,9 +18,17 @@ const firebaseConfig = {
   measurementId: "G-YYGVC7Z6SH"
 };
 
-// Initialize Firebase
+// Initialize Firebase with persistent local cache for instant mobile load and resilience
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch {
+  firestoreInstance = getFirestore(app);
+}
+export const db = firestoreInstance;
 export const auth = getAuth();
 
 // Error handling in conformance with the firebase-integration guidelines
